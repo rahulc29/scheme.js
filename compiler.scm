@@ -60,9 +60,9 @@
                                                (parse-s-expr (lambda->body expr))))]
     [(let? expr) (make-tagged 'let (list (let->bindings expr)
                                          (let->body expr)))]
-    [(if-then-else? expr) (make-tagged 'if-then-else (list (if-then-else->if expr)
-                                                           (if-then-else->then expr)
-                                                           (if-then-else->else expr)))]
+    [(if-then-else? expr) (make-tagged 'if-then-else (list (parse-s-expr (if-then-else->if expr))
+                                                           (parse-s-expr (if-then-else->then expr))
+                                                           (parse-s-expr(if-then-else->else expr))))]
     [(cond? expr) (make-tagged 'cond (parse-cond-subs expr))]
     [(call? expr) (make-tagged 'call
                                (list
@@ -158,6 +158,29 @@
     (generate-applicands applicands)
     (display ")" out))
   (generate-call-impl out env (call->applicator expr) (call->applicands expr)))
+(define (generate-if-then-else out env expr)
+  (define (if-then-else->if expr)
+    (list-ref (tagged->datum expr) 0))
+  (define (if-then-else->then expr)
+    (list-ref (tagged->datum expr) 1))
+  (define (if-then-else->else expr)
+    (list-ref (tagged->datum expr) 2))
+  (display "(()" out)
+  (display " => " out)
+  (display " { " out)
+  (display " if " out)
+  (display " ( " out)
+  (generate-expr out env (if-then-else->if expr))
+  (display " ) " out)
+  (display " { return " out)
+  (generate-expr out env (if-then-else->then expr))
+  (display " ;} " out)
+  (display " else " out)
+  (display " { return " out)
+  (generate-expr out env (if-then-else->else expr))
+  (display " ;} " out)
+  (display " })" out)
+  (display "()" out))
 (define (generate-expr out env expr)
   (define (const? expr)
     (eq? 'const (tagged->tag expr)))
@@ -167,12 +190,15 @@
     (eq? 'lambda (tagged->tag expr)))
   (define (call? expr)
     (eq? 'call (tagged->tag expr)))
+  (define (if-then-else? expr)
+    (eq? 'if-then-else (tagged->tag expr)))
   (cond
     [(null? expr) (display " " out)]
     [(const? expr) (generate-constant out env expr)]
     [(identifier? expr) (generate-identifier out env expr)]
     [(lambda? expr) (generate-lambda out env expr)]
-    [(call? expr) (generate-call out env expr)]))
+    [(call? expr) (generate-call out env expr)]
+    [(if-then-else? expr) (generate-if-then-else out env expr)]))
 ; Utility functions for testing
 (define (string->s-expr text)
     (port->list read (open-input-string text)))
