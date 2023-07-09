@@ -55,3 +55,43 @@ Compiles into the following monstrosity (I have prettified the code generated) :
 
 I invite you to use the developer tools available in your browser and insert the following code and play around with it! 
 
+Of course, it would be better if I showed you all the layers that went into the construction of said monstrosity!
+
+Firstly, the desugaring layer will unfold the `letrec` into a `let` 
+
+```scheme
+(let [f (fix (lambda (f) 
+              (lambda (n) 
+               (if (eq? n 0)
+                    1
+                    (n * (f (- n 1)))))))]
+    (f 5))
+```
+
+What on god's earth is `fix`? I live by a simple principle :
+
+> Do not implement recursion if you can get away with fixpoint combinators. 
+
+In our situation, we _can_ get away with fixpoint combinators! 
+
+In particular, the macro expansion layer will expand `fix` into the call-by-value Y combinator. 
+
+This will generate the following code : 
+
+```scheme
+(let [f ((lambda (f) 
+          ((lambda (x) 
+            (f (lambda (y) ((x x) y)))) 
+           (lambda (x) 
+            (f (lambda (y) ((x x) y)))))) 
+         (lambda (f) 
+          (lambda (n) 
+           (if (eq? n 0) 
+                1 
+                (* n (f (- n 1)))))))]
+      (f 5))
+```
+
+Already pretty ugly, huh? 
+
+This code will then be compiled into JavaScript, thus producing the garbage code we saw.
