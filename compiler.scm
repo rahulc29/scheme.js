@@ -89,26 +89,68 @@
   (env 'head))
 (define (empty-env? env)
   (env 'empty?))
+(define (env-val env)
+  (env 'val))
 (define (env-lookup env expr)
   (if (empty-env? env)
       #f
       (if (eq? (tagged->datum expr) (env-head env))
-          #t
+          (env-val env)
           (env-lookup (env-sub env) expr))))
 (define (empty-env)
   (lambda (signal)
     (cond
       [(eq? signal 'sub) '()]
       [(eq? signal 'empty?) #t]
-      [(eq? signal 'head) '()])))
-(define (extend-env env binding)
+      [(eq? signal 'head) '()]
+      [(eq? signal 'val) '()])))
+(define (extend-env env binding value) 
   (lambda (signal)
     (cond
       [(eq? signal 'sub) env]
       [(eq? signal 'empty?) #f]
-      [(eq? signal 'head) binding])))
-; Validators
-
+      [(eq? signal 'head) binding]
+      [(eq? signal 'val) value])))
+; Macro Expansion
+(define (expand-macros env expr)
+  (define (const? expr)
+    (eq? 'const (tagged->tag expr)))
+  (define (identifier? expr)
+    (eq? 'identifier (tagged->tag expr)))
+  (define (lambda? expr)
+    (eq? 'lambda (tagged->tag expr)))
+  (define (call? expr)
+    (eq? 'call (tagged->tag expr)))
+  (define (if-then-else? expr)
+    (eq? 'if-then-else (tagged->tag expr)))
+  (define (let? expr)
+    (eq? 'let (tagged->tag expr)))
+  (define (letrec? expr)
+    (eq? 'letrec (tagged->tag expr)))
+  (define (lambda->body expr)
+    (list-ref (tagged->datum expr) 1))
+  (define (if-then-else->if expr)
+    (list-ref (tagged->datum expr) 0))
+  (define (if-then-else->then expr)
+    (list-ref (tagged->datum expr) 1))
+  (define (if-then-else->else expr)
+    (list-ref (tagged->datum expr) 2))
+  (define (call->applicator expr)
+    (list-ref (tagged->datum expr) 0))
+  (define (call->applicands expr)
+    (list-ref (tagged->datum expr) 1))
+  (cond
+    [(const? expr) expr]
+    [(identifier? expr) (env-lookup env expr)]
+    [(lambda? expr) (expand-macros env (lambda->body expr))]
+    [(if-then-else? expr) (make-tagged 'if-then-else (list (expand-macros env (if-then-else->if expr))
+                                                           (expand-macros env (if-then-else->then expr))
+                                                           (expand-macros env (if-then-else->else expr))))]
+    [(let? expr) expr] ; TODO : Implement macro expansion for lets
+    [(letrec? expr) expr] ; TODO Implement macro expansion for letrecs
+    [(call? expr) (make-tagged 'call (list (expand-macros env (call->applicator expr))
+                                           (map (lambda (applicand) (expand-macros env applicand)) (call->applicands expr))))]))
+                                       
 ; Desugaring layer
 ; Code reusability can be greatly improved here lmao
 (define (multi-binding-let->nested-let expr)
@@ -136,6 +178,24 @@
       (make-tagged 'call (list (make-tagged 'lambda (list (let->bindings expr) (let->redundant-lambda (let->body expr))))
                                (let->binding-inits expr)))
       expr))
+(define (letrec->fix-form expr)
+  (define (letrec->name expr)
+    (list-ref expr 1))
+  (define (letrec->induction-variables expr)
+    (list-ref expr 2))
+  (define (letrec->body expr)
+    (list-ref expr 3))
+  (define (letrec-body->fix-body expr)
+    '())
+  (make-tagged 'call (list (parse-s-expr '(lambda (f)
+                             ((lambda (x)
+                                (f (lambda (y)
+                                     ((x x) y))))
+                              (lambda (x)
+                                (f (lambda (y)
+                                     ((x x) y)))))))
+                           (make-tagged 'lambda (list '(self)
+                                                      (letrec-body->fix-body expr))))))
 (define (desugar expr)
   (define (const? expr)
     (eq? 'const (tagged->tag expr)))
@@ -149,8 +209,11 @@
     (eq? 'if-then-else (tagged->tag expr)))
   (define (let? expr)
     (eq? 'let (tagged->tag expr)))
+  (define (letrec? expr)
+    (eq? 'letrec (tagged->tag expr)))
   (cond
     [(let? expr) (let->redundant-lambda (multi-binding-let->nested-let expr))]
+    [(letrec? expr) (letrec->fix-form expr)]
     [else expr]))
 ; Generators
 (define (generate-constant out env expr)
@@ -177,7 +240,7 @@
       (if (null? bindings)
           env
           (extend-env (add-bindings env (cdr bindings))
-                      (car bindings))))
+                      (car bindings) #t)))
     (add-bindings env (lambda->binding-vars expr)))
   (define (lambda->binding-vars expr)
     (list-ref (tagged->datum expr) 0))
@@ -267,4 +330,3 @@
   (map parse-s-expr (string->s-expr text)))
 (define (compile port env expr)
   (generate-expr port env (desugar expr)))
-                               
