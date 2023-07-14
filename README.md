@@ -17,38 +17,50 @@ Consider the following definition of factorial :
 Compiles into the following monstrosity (I have prettified the code generated) : 
 
 ```js
-((f) => {
-    return (() => {
-        return (x) => {
-            return (() => {
-                return f;
-            })()((y) => {
-                return (() => {
-                    return (() => {
-                        return x;
-                    })()(x);
-                })()(y);
-            });
-        };
-    })()((x) => {
-        return (() => {
-            return f;
-        })()((y) => {
-            return (() => {
-                return (() => {
-                    return x;
-                })()(x);
-            })()(y);
-        });
-    });
-})((f) => {
-    return (n) => {
-        if (n === 0) {
-            return 1;
-        } else {
-            return n * (f(n - 1));
-        }
-    }
+(() => {
+	return (f) => {
+		return (() => {
+			return (x) => {
+				return (() => {
+					return f;
+				})()((y) => {
+					return (() => {
+						return (() => {
+							return x;
+						})()(x);
+					})()(y);
+				});
+			};
+		})()((x) => {
+			return (() => {
+				return f;
+			})()((y) => {
+				return (() => {
+					return (() => {
+						return x;
+					})()(x);
+				})()(y);
+			});
+		});
+	};
+})()((f) => {
+	return (n) => {
+		return (() => {
+			if ((() => {
+					return n === 0;
+				})()) {
+				return 1;
+			} else {
+				return (() => {
+					return (x, y) => x * y;
+				})()(n, (() => {
+					return f;
+				})()((() => {
+					return (x, y) => x - y;
+				})()(n, 1)));
+			}
+		})();
+	};
 })(5)
 // Outputs 120 
 ```
